@@ -263,8 +263,16 @@
 
   $("startQueue").addEventListener("click", async () => {
     try {
+      // If nothing is active, aim at the Echo/Alexa (or any speaker) automatically.
+      let dev = "";
+      if (!state?.device) {
+        const d = (await sp("/me/player/devices"))?.devices || [];
+        const pick = d.find((x) => /echo|alexa/i.test(x.name)) || d.find((x) => x.type === "Speaker") || d[0];
+        if (!pick) throw new Error("No speakers online — say \"Alexa, play Spotify\" first");
+        dev = "?device_id=" + pick.id;
+      }
+      await sp("/me/player/play" + dev, { method: "PUT", body: JSON.stringify({ context_uri: PURI, offset: { position: 0 } }) });
       await sp("/me/player/shuffle?state=false", { method: "PUT" }).catch(() => {});
-      await sp("/me/player/play", { method: "PUT", body: JSON.stringify({ context_uri: PURI, offset: { position: 0 } }) });
       toast("Party queue started 🎉"); curIdx = 0;
       setTimeout(refresh, 900);
     } catch (e) { toast(e.message); }
