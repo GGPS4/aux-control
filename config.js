@@ -2,9 +2,10 @@
 // NOTE: everything here is public to anyone who views the page source.
 window.AUX_CONFIG = {
   partyName: "Ben's Aux",
-  clientId: "",
+  clientId: "c0d482384ba34280adb969654e30a694",
   clientSecret: "",
   refreshToken: "",
+  playlistId: "",
   // Optional: friends must type this code before the controls unlock. Leave "" to disable.
   accessCode: ""
 };
