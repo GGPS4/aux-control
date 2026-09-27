@@ -73,7 +73,7 @@
       lastFetch = Date.now();
       renderNow();
       renderVolume();
-      if (state?.item?.uri !== prevUri) { loadLyrics(); loadQueue(); }
+      if (state?.item?.uri !== prevUri) { loadLyrics(); loadQueue(); if (simFor) loadSimilar(); }
       else computeCurIdx(), renderQueue();
     } catch (e) { $("title").textContent = e.message; }
   }
@@ -147,7 +147,32 @@
   });
   $("volMax").addEventListener("click", () => { setVolume(100); toast("Volume MAX 🔊"); });
 
-  // ---------- search + add ----------
+  // ---------- song lists: tap a row = play now, queue icon = add to queue ----------
+  const QICON = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 6h12v2H3zm0 5h12v2H3zm0 5h8v2H3zm14-2v-3h2v3h3v2h-3v3h-2v-3h-3v-2z"/></svg>`;
+  function renderTracks(ul, tracks) {
+    ul.innerHTML = tracks.map((t, i) => `
+      <li class="song" data-i="${i}" title="Tap to play now">
+        <img src="${esc(smallImg(t.album?.images))}" alt="">
+        <div class="txt"><div>${esc(t.name)}</div><div class="muted">${esc(artists(t))}</div></div>
+        <span class="play-hint">▶</span>
+        <button class="qbtn" data-i="${i}" title="Add to queue" aria-label="Add to queue">${QICON}</button></li>`).join("");
+    ul.querySelectorAll("li.song").forEach((li) => li.addEventListener("click", async (ev) => {
+      if (ev.target.closest("button")) return;
+      if (li.classList.contains("busy")) return;
+      const t = tracks[li.dataset.i];
+      li.classList.add("busy");
+      try { await playNow(t); toast(`▶ Playing "${t.name}"`); setTimeout(refresh, 900); }
+      catch (e) { toast(e.message); }
+      li.classList.remove("busy");
+    }));
+    ul.querySelectorAll("button.qbtn").forEach((b) => b.addEventListener("click", async () => {
+      const t = tracks[b.dataset.i];
+      b.disabled = true;
+      try { await addSong(t); b.textContent = "✓"; toast(`Queued "${t.name}"`); }
+      catch (e) { toast(e.message); b.disabled = false; }
+    }));
+  }
+
   $("searchForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const q = $("q").value.trim(); if (!q) return;
@@ -156,18 +181,7 @@
       const j = await sp(`/search?type=track&limit=10&q=${encodeURIComponent(q)}`);
       const tracks = j.tracks?.items || [];
       if (!tracks.length) { ul.innerHTML = "<li class='muted'>No results</li>"; return; }
-      ul.innerHTML = tracks.map((t, i) => `
-        <li><img src="${esc(smallImg(t.album.images))}" alt="">
-          <div class="txt"><div>${esc(t.name)}</div><div class="muted">${esc(artists(t))}</div></div>
-          <button data-i="${i}">+ Add</button></li>`).join("");
-      ul.querySelectorAll("button").forEach((b) => b.addEventListener("click", async () => {
-        const t = tracks[b.dataset.i];
-        b.disabled = true;
-        try {
-          await addSong(t);
-          b.textContent = "Added ✓"; toast(`Added "${t.name}"`);
-        } catch (e) { toast(e.message); b.disabled = false; }
-      }));
+      renderTracks(ul, tracks);
     } catch (e) { ul.innerHTML = `<li class='muted'>${esc(e.message)}</li>`; }
   });
 
@@ -179,6 +193,73 @@
     await sp(`/playlists/${PID}/items`, { method: "POST", body: JSON.stringify({ uris: [t.uri] }) });
     await loadQueue();
   }
+
+  // Aim at the active speaker, or the Echo/Alexa if nothing is active.
+  async function deviceParam() {
+    if (state?.device) return "";
+    const d = (await sp("/me/player/devices"))?.devices || [];
+    const pick = d.find((x) => x.is_active) || d.find((x) => /echo|alexa/i.test(x.name)) || d.find((x) => x.type === "Speaker") || d[0];
+    if (!pick) throw new Error("No speakers online — say \"Alexa, play Spotify\" first");
+    return "?device_id=" + pick.id;
+  }
+
+  // Play a song right now. It's slotted in right after the current song in the party
+  // queue, so everything that was queued still plays afterwards.
+  async function playNow(t) {
+    const dev = await deviceParam();
+    if (!PID) {
+      await sp("/me/player/play" + dev, { method: "PUT", body: JSON.stringify({ uris: [t.uri] }) });
+      return;
+    }
+    const pos = inParty() && curIdx >= 0 ? curIdx + 1 : 0;
+    await sp(`/playlists/${PID}/items`, { method: "POST", body: JSON.stringify({ uris: [t.uri], position: pos }) });
+    await sp("/me/player/play" + dev, { method: "PUT", body: JSON.stringify({ context_uri: PURI, offset: { position: pos } }) });
+    curIdx = pos;
+    sp("/me/player/shuffle?state=false", { method: "PUT" }).catch(() => {});
+    loadQueue();
+  }
+
+  // ---------- more like this (Deezer artist radio -> matched on Spotify) ----------
+  const jsonp = (url) => new Promise((res, rej) => {
+    const cb = "dz" + Math.floor(Math.random() * 1e9);
+    const s = document.createElement("script");
+    const done = () => { delete window[cb]; s.remove(); };
+    window[cb] = (d) => { done(); res(d); };
+    s.onerror = () => { done(); rej(new Error("Couldn't reach the suggestions service")); };
+    s.src = url + (url.includes("?") ? "&" : "?") + "output=jsonp&callback=" + cb;
+    document.head.appendChild(s);
+    setTimeout(() => rej(new Error("Suggestions timed out")), 9000);
+  });
+  let simFor = "";
+  async function loadSimilar(force) {
+    const item = state?.item;
+    const ul = $("similar");
+    if (!item || item.type !== "track") { ul.innerHTML = "<li class='muted'>Play something first</li>"; return; }
+    if (!force && simFor === item.uri) return;
+    simFor = item.uri;
+    ul.innerHTML = "<li class='muted'>Finding similar songs…</li>";
+    try {
+      const mainArtist = item.artists?.[0]?.name || "";
+      const a = await jsonp("https://api.deezer.com/search/artist?limit=1&q=" + encodeURIComponent(mainArtist));
+      const aid = a?.data?.[0]?.id; if (!aid) throw new Error("No suggestions for this artist");
+      const radio = await jsonp(`https://api.deezer.com/artist/${aid}/radio?limit=40`);
+      let picks = (radio?.data || []).filter((x) => x.title_short.toLowerCase() !== item.name.toLowerCase());
+      // favour other artists, keep a couple from the same one, shuffle for variety
+      const other = picks.filter((x) => x.artist.name.toLowerCase() !== mainArtist.toLowerCase());
+      const same = picks.filter((x) => x.artist.name.toLowerCase() === mainArtist.toLowerCase());
+      const shuffle = (arr) => arr.map((v) => [Math.random(), v]).sort((p, q) => p[0] - q[0]).map((p) => p[1]);
+      picks = shuffle([...shuffle(other).slice(0, 6), ...shuffle(same).slice(0, 2)]);
+      const found = await Promise.all(picks.map((x) =>
+        sp(`/search?type=track&limit=1&q=${encodeURIComponent(`track:${x.title_short} artist:${x.artist.name}`)}`)
+          .then((j) => j?.tracks?.items?.[0]).catch(() => null)));
+      if (simFor !== item.uri) return;
+      const seen = new Set();
+      const tracks = found.filter((t) => t && !seen.has(t.uri) && seen.add(t.uri));
+      if (!tracks.length) { ul.innerHTML = "<li class='muted'>No suggestions found</li>"; return; }
+      renderTracks(ul, tracks);
+    } catch (e) { ul.innerHTML = `<li class='muted'>${esc(e.message)}</li>`; simFor = ""; }
+  }
+  $("simBtn").addEventListener("click", () => { $("simBtn").textContent = "↻ Refresh"; loadSimilar(true); });
 
   // ---------- party queue (a playlist, so it can be reordered) ----------
   async function loadQueue() {
@@ -263,14 +344,7 @@
 
   $("startQueue").addEventListener("click", async () => {
     try {
-      // If nothing is active, aim at the Echo/Alexa (or any speaker) automatically.
-      let dev = "";
-      if (!state?.device) {
-        const d = (await sp("/me/player/devices"))?.devices || [];
-        const pick = d.find((x) => /echo|alexa/i.test(x.name)) || d.find((x) => x.type === "Speaker") || d[0];
-        if (!pick) throw new Error("No speakers online — say \"Alexa, play Spotify\" first");
-        dev = "?device_id=" + pick.id;
-      }
+      const dev = await deviceParam();
       await sp("/me/player/play" + dev, { method: "PUT", body: JSON.stringify({ context_uri: PURI, offset: { position: 0 } }) });
       await sp("/me/player/shuffle?state=false", { method: "PUT" }).catch(() => {});
       toast("Party queue started 🎉"); curIdx = 0;
