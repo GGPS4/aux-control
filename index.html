@@ -103,7 +103,13 @@
     </div>
   </div>
 
-  <script src="config.js"></script>
-  <script src="app.js"></script>
+  <script>
+    // Load config + app fresh every time (GitHub Pages caches files for ~10 min).
+    (function () {
+      var v = Date.now();
+      function load(src, cb) { var s = document.createElement("script"); s.src = src + "?v=" + v; s.onload = cb; document.body.appendChild(s); }
+      load("config.js", function () { load("app.js"); });
+    })();
+  </script>
 </body>
 </html>
