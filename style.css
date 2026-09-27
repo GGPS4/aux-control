@@ -46,3 +46,40 @@ pre { white-space: pre-wrap; word-break: break-all; background: #0b0d11; padding
 a { color: var(--accent); }
 ol li { margin-bottom: 8px; }
 code { background: #0b0d11; padding: 1px 5px; border-radius: 4px; }
+
+/* ---- v2 additions ---- */
+.top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.row.between { justify-content: space-between; align-items: center; }
+.row.center { align-items: center; }
+.small { padding: 6px 10px; font-size: .8rem; }
+.small-txt { font-size: .8rem; margin: 8px 0 0; }
+.vol-val { font-weight: 700; color: var(--accent); }
+input[type=range] { flex: 1; accent-color: var(--accent); padding: 0; border: 0; background: transparent; height: 28px; }
+.banner { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  background: #23301f; border: 1px solid #2f5a2a; padding: 10px; border-radius: 10px; margin-top: 10px; font-size: .9rem; }
+.qbtns { display: flex; gap: 4px; flex: none; }
+.qbtns button { padding: 6px 8px; font-size: .85rem; background: #2a2e37; color: var(--text); }
+.qbtns button.del { color: #ff8080; }
+.list li.playing .txt div:first-child { color: var(--accent); font-weight: 700; }
+.lyrics { max-height: 260px; overflow-y: auto; scroll-behavior: smooth; }
+.lyrics p { margin: 6px 0; color: var(--muted); transition: color .2s, transform .2s; }
+.lyrics p.cur { color: var(--text); font-weight: 700; transform-origin: left; transform: scale(1.04); }
+/* party mode */
+.party { position: fixed; inset: 0; z-index: 50; background: #000; color: #fff; overflow: hidden; }
+.party-bg { position: absolute; inset: -40px; background-size: cover; background-position: center; filter: blur(40px) brightness(.45); transform: scale(1.1); }
+.party-exit { position: absolute; top: 16px; right: 16px; z-index: 2; background: rgba(0,0,0,.4); color: #fff; font-size: 1.2rem; }
+.party-inner { position: relative; z-index: 1; height: 100%; display: flex; align-items: center; justify-content: center; gap: 5vw; padding: 5vw; }
+#pArt { width: min(42vw, 70vh); aspect-ratio: 1; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.6); object-fit: cover; }
+.party-meta { flex: 1; min-width: 0; max-width: 700px; }
+.p-title { font-size: clamp(1.8rem, 5vw, 4.5rem); font-weight: 800; line-height: 1.05; }
+.p-artist { font-size: clamp(1.1rem, 2.5vw, 2rem); opacity: .8; margin-top: 8px; }
+.p-bar { height: 8px; margin-top: 24px; background: rgba(255,255,255,.2); }
+#pProgress { height: 100%; width: 0; background: #fff; transition: width .5s linear; }
+.p-lyric { font-size: clamp(1.3rem, 3vw, 2.6rem); font-weight: 700; margin-top: 32px; min-height: 1.2em; }
+.p-lyric-next { font-size: clamp(1rem, 2vw, 1.6rem); opacity: .5; margin-top: 8px; min-height: 1.2em; }
+.p-next { margin-top: 32px; opacity: .75; font-size: clamp(.9rem, 1.6vw, 1.3rem); }
+@media (max-width: 700px) {
+  .party-inner { flex-direction: column; text-align: center; }
+  #pArt { width: 70vw; }
+}
+p > input { width: 100%; }

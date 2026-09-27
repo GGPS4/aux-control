@@ -8,9 +8,12 @@
 </head>
 <body>
   <main class="wrap">
-    <header>
-      <h1 id="partyName">Aux Control</h1>
-      <p class="sub">Control the music on the speaker</p>
+    <header class="top">
+      <div>
+        <h1 id="partyName">Aux Control</h1>
+        <p class="sub">Control the music on the speaker</p>
+      </div>
+      <button id="partyBtn" class="ghost hidden">🎉 Party mode</button>
     </header>
 
     <section id="gate" class="card hidden">
@@ -36,12 +39,23 @@
       <section class="controls">
         <button data-act="previous" title="Previous song">⏮<span>Back</span></button>
         <button data-act="restart" title="Restart this song">↺<span>Restart</span></button>
-        <button data-act="toggle" id="playBtn" title="Play / pause">⏯<span>Play/Pause</span></button>
+        <button data-act="toggle" id="playBtn" title="Play / pause"><b>⏯</b><span>Play/Pause</span></button>
         <button data-act="next" title="Skip">⏭<span>Skip</span></button>
       </section>
 
       <section class="card">
-        <h2>Add to queue</h2>
+        <div class="row between"><h2>Volume</h2><span id="volVal" class="vol-val">–</span></div>
+        <div class="row center">
+          <span>🔈</span>
+          <input id="vol" type="range" min="0" max="100" step="1" value="50">
+          <span>🔊</span>
+          <button id="volMax" class="small">MAX</button>
+        </div>
+        <p id="volNote" class="muted small-txt hidden">This speaker doesn't let Spotify change its volume.</p>
+      </section>
+
+      <section class="card">
+        <h2>Add a song</h2>
         <form id="searchForm" class="row">
           <input id="q" type="search" placeholder="Search songs…" autocomplete="off">
           <button type="submit">Search</button>
@@ -50,8 +64,17 @@
       </section>
 
       <section class="card">
-        <h2>Up next</h2>
+        <div class="row between"><h2>Up next</h2><button id="clearPlayed" class="ghost small">Clear played</button></div>
+        <div id="startBanner" class="banner hidden">
+          <span>The party queue isn't what's playing right now.</span>
+          <button id="startQueue" class="small">▶ Start party queue</button>
+        </div>
         <ul id="queue" class="list"></ul>
+      </section>
+
+      <section class="card">
+        <div class="row between"><h2>Lyrics</h2><span id="lyrSrc" class="muted small-txt"></span></div>
+        <div id="lyrics" class="lyrics"><p class="muted">No song playing</p></div>
       </section>
 
       <section class="card">
@@ -63,6 +86,23 @@
 
     <div id="toast" class="toast"></div>
   </main>
+
+  <div id="party" class="party hidden">
+    <div id="partyBg" class="party-bg"></div>
+    <button id="partyExit" class="party-exit" title="Exit">✕</button>
+    <div class="party-inner">
+      <img id="pArt" alt="">
+      <div class="party-meta">
+        <div id="pTitle" class="p-title"></div>
+        <div id="pArtist" class="p-artist"></div>
+        <div class="bar p-bar"><div id="pProgress"></div></div>
+        <div id="pLyric" class="p-lyric"></div>
+        <div id="pLyricNext" class="p-lyric-next"></div>
+        <div id="pNext" class="p-next"></div>
+      </div>
+    </div>
+  </div>
+
   <script src="config.js"></script>
   <script src="app.js"></script>
 </body>

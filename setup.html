@@ -9,21 +9,21 @@
 <body>
 <main class="wrap">
   <h1>Aux setup (owner only)</h1>
-  <p class="muted">Run this once from your own browser. It logs into <b>your</b> Spotify and generates the <code>config.js</code> file for the site.</p>
+  <p class="muted">Run this from your own browser. It logs into <b>your</b> Spotify, makes a private "Aux Queue" playlist, and generates the <code>config.js</code> file for the site.</p>
 
   <section class="card">
-    <h2>1. Create a Spotify app</h2>
+    <h2>1. Spotify app</h2>
     <ol>
-      <li>Go to <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a> → <b>Create app</b>.</li>
-      <li>Pick <b>Web API</b>. For <b>Redirect URI</b> paste exactly:<br><code id="redir"></code></li>
-      <li>Save, then open the app's <b>Settings</b> and copy the Client ID and Client secret.</li>
+      <li>At <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a>, create an app (Web API).</li>
+      <li>Its <b>Redirect URI</b> must be exactly:<br><code id="redir"></code></li>
+      <li>In the app's <b>Settings</b>, copy the Client ID and Client secret (click "View client secret").</li>
     </ol>
   </section>
 
   <section class="card">
     <h2>2. Log in</h2>
     <form id="f">
-      <p><input id="name" placeholder="Site name (e.g. Ben's Aux)" value="Ben's Aux"></p>
+      <p><input id="name" placeholder="Site name (e.g. Ben's Aux)"></p>
       <p><input id="cid" placeholder="Client ID" required></p>
       <p><input id="sec" placeholder="Client secret" required></p>
       <p><input id="code" placeholder="Optional access code for friends"></p>
@@ -33,20 +33,33 @@
 
   <section class="card hidden" id="out">
     <h2>3. Paste this into config.js on GitHub</h2>
-    <p class="muted">Open <code>config.js</code> in your repo → pencil (Edit) → replace everything → Commit. The site updates in about a minute.</p>
+    <p class="muted">Click Copy, then <a id="editLink" target="_blank" rel="noopener">open config.js for editing</a> → select all → paste → <b>Commit changes</b>. The site updates in about a minute.</p>
     <pre id="cfg"></pre>
     <button id="copy">Copy</button>
   </section>
   <p id="err" class="muted"></p>
 </main>
+<script src="config.js"></script>
 <script>
+  const C = window.AUX_CONFIG || {};
+  const $ = (id) => document.getElementById(id);
   const redirect = location.origin + location.pathname;
-  document.getElementById("redir").textContent = redirect;
-  const scopes = "user-read-playback-state user-modify-playback-state user-read-currently-playing";
+  $("redir").textContent = redirect;
+  $("name").value = C.partyName || "Ben's Aux";
+  $("cid").value = C.clientId || "";
+  $("code").value = C.accessCode || "";
+  // GitHub edit link: https://<user>.github.io/<repo>/ -> github.com/<user>/<repo>/edit/main/config.js
+  const user = location.hostname.split(".")[0], repo = location.pathname.split("/")[1];
+  $("editLink").href = `https://github.com/${user}/${repo}/edit/main/config.js`;
 
-  document.getElementById("f").addEventListener("submit", (e) => {
+  const scopes = [
+    "user-read-playback-state", "user-modify-playback-state", "user-read-currently-playing",
+    "playlist-read-private", "playlist-modify-private", "playlist-modify-public"
+  ].join(" ");
+
+  $("f").addEventListener("submit", (e) => {
     e.preventDefault();
-    const v = (id) => document.getElementById(id).value.trim();
+    const v = (id) => $(id).value.trim();
     const s = { name: v("name"), cid: v("cid"), sec: v("sec"), code: v("code") };
     sessionStorage.setItem("auxSetup", JSON.stringify(s));
     const st = Math.random().toString(36).slice(2);
@@ -58,10 +71,12 @@
 
   (async () => {
     const p = new URLSearchParams(location.search);
+    if (p.get("error")) { $("err").textContent = "Spotify said: " + p.get("error"); return; }
     if (!p.get("code")) return;
-    const err = document.getElementById("err");
+    const err = $("err");
     const s = JSON.parse(sessionStorage.getItem("auxSetup") || "null");
     if (!s || p.get("state") !== sessionStorage.getItem("auxState")) { err.textContent = "Setup info missing — fill in the form again."; return; }
+    err.textContent = "Finishing login…";
     const r = await fetch("https://accounts.spotify.com/api/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: "Basic " + btoa(s.cid + ":" + s.sec) },
@@ -71,12 +86,31 @@
     history.replaceState(null, "", redirect);
     if (!r.ok) { err.textContent = "Error: " + (j.error_description || j.error); return; }
     sessionStorage.removeItem("auxSetup");
+
+    // Reuse the existing party playlist if config already has one, otherwise create it.
+    let playlistId = C.playlistId || "";
+    const auth = { Authorization: "Bearer " + j.access_token, "Content-Type": "application/json" };
+    if (playlistId) {
+      const chk = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}?fields=id`, { headers: auth });
+      if (!chk.ok) playlistId = "";
+    }
+    if (!playlistId) {
+      const pr = await fetch("https://api.spotify.com/v1/me/playlists", {
+        method: "POST", headers: auth,
+        body: JSON.stringify({ name: "Aux Queue", public: false, description: "Party queue controlled by the Aux Control website" })
+      });
+      const pj = await pr.json().catch(() => ({}));
+      if (pr.ok) playlistId = pj.id;
+      else { err.textContent = "Logged in, but couldn't create the Aux Queue playlist (" + (pj.error?.message || pr.status) + "). The site will fall back to Spotify's normal queue."; }
+    }
+    if (playlistId) err.textContent = "";
+
     const cfg = `// Generated by setup.html on ${new Date().toLocaleDateString()}. Spotify makes you redo this every ~6 months.
-window.AUX_CONFIG = ${JSON.stringify({ partyName: s.name, clientId: s.cid, clientSecret: s.sec, refreshToken: j.refresh_token, accessCode: s.code }, null, 2)};
+window.AUX_CONFIG = ${JSON.stringify({ partyName: s.name, clientId: s.cid, clientSecret: s.sec, refreshToken: j.refresh_token, playlistId, accessCode: s.code }, null, 2)};
 `;
-    document.getElementById("cfg").textContent = cfg;
-    document.getElementById("out").classList.remove("hidden");
-    document.getElementById("copy").onclick = () => navigator.clipboard.writeText(cfg).then(() => document.getElementById("copy").textContent = "Copied ✓");
+    $("cfg").textContent = cfg;
+    $("out").classList.remove("hidden");
+    $("copy").onclick = () => navigator.clipboard.writeText(cfg).then(() => $("copy").textContent = "Copied ✓");
   })();
 </script>
 </body>
