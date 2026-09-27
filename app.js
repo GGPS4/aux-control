@@ -53,7 +53,7 @@
 
   async function sp(path, opts = {}) {
     const t = await getToken();
-    const r = await fetch(API + path, { ...opts, headers: { Authorization: "Bearer " + t, "Content-Type": "application/json", ...(opts.headers || {}) } });
+    const r = await fetch(API + path, { cache: "no-store", ...opts, headers: { Authorization: "Bearer " + t, "Content-Type": "application/json", ...(opts.headers || {}) } });
     if (r.status === 204 || r.status === 202) return null;
     const text = await r.text();
     let j = null; try { j = text ? JSON.parse(text) : null; } catch { j = null; }
@@ -384,6 +384,8 @@
       }));
     } catch (e) { ul.innerHTML = `<li class='muted'>${esc(e.message)}</li>`; }
   }
+
+  window.auxDebug = { sp }; // handy for troubleshooting from the browser console
 
   // ---------- start ----------
   function start() {
