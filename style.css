@@ -76,3 +76,5 @@ p > input { width: 100%; }
 .qbtn { background: #2a2e37; color: var(--text); padding: 8px; display: grid; place-items: center; flex: none; min-width: 40px; }
 .qbtn:hover { background: var(--accent); color: var(--accent-ink); }
 .qicon-inline { font-weight: 700; color: var(--text); }
+
+#wakeBtn.on { border-color: var(--accent); color: var(--accent); }

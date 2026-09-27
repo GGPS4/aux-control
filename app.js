@@ -68,9 +68,11 @@
   // ---------- now playing ----------
   async function refresh() {
     try {
-      const prevUri = state?.item?.uri;
+      const prev = state, prevPos = position();
+      const prevUri = prev?.item?.uri;
       state = await sp("/me/player?additional_types=episode");
       lastFetch = Date.now();
+      checkMissedHandoff(prev, prevPos);
       renderNow();
       renderVolume();
       renderSpeakerNotice();
@@ -98,6 +100,42 @@
     $("progress").style.width = pct;
     syncLyrics(pos);
     if (state.is_playing && pos >= item.duration_ms && Date.now() - lastFetch > 1500) refresh();
+    // Something Alexa started is about to finish -> hand the Echo over to the shared queue.
+    if (outsideQueue() && item.duration_ms - pos < 2500 && handoffFor !== item.uri) {
+      handoffFor = item.uri;
+      handoff(item.uri);
+    }
+  }
+
+  // ---------- Alexa requests: let the song finish, then go back to the shared queue ----------
+  let handoffFor = "", manualUntil = 0;
+  const outsideQueue = () => PID && state?.is_playing && state?.item && !inQueue() && onEcho() && upcomingStart() < plist.length;
+
+  async function handoff(uri, missed) {
+    // small random delay so several open pages don't all fire at once
+    await new Promise((r) => setTimeout(r, 300 + Math.random() * 900));
+    try {
+      const fresh = await sp("/me/player?additional_types=episode");
+      if (!fresh?.item || fresh.context?.uri === PURI) return;         // someone already switched
+      if (!missed && fresh.item.uri === uri && fresh.item.duration_ms - fresh.progress_ms > 6000) { handoffFor = ""; return; } // rewound
+      state = fresh; lastFetch = Date.now();
+      await loadQueue();
+      const pos = upcomingStart();
+      if (pos >= plist.length) return;
+      await startQueueAt(pos);
+      toast("Back to the shared queue ▶");
+    } catch (e) { handoffFor = ""; }
+  }
+
+  // If this page was asleep when the song ended, catch it on the next check:
+  // the previous Alexa song was near its end and now a different non-queue song is playing.
+  function checkMissedHandoff(prev, prevPos) {
+    if (!prev?.is_playing || !prev.item || prev.context?.uri === PURI || Date.now() < manualUntil) return;
+    if (!state?.item || state.item.uri === prev.item.uri || !outsideQueue()) return;
+    if (prev.item.duration_ms - prevPos > 20000) return; // it was changed mid-song (e.g. "Alexa, play…"), not finished
+    if (handoffFor === prev.item.uri) return;
+    handoffFor = prev.item.uri;
+    handoff(state.item.uri, true);
   }
 
   // ---------- controls ----------
@@ -116,6 +154,7 @@
   const labels = { next: "Skipped ⏭", previous: "Went back ⏮", restart: "Restarted ↺", toggle: "Done" };
   document.querySelectorAll(".controls button").forEach((b) =>
     b.addEventListener("click", async () => {
+      manualUntil = Date.now() + 8000;
       b.disabled = true;
       try { await actions[b.dataset.act](); toast(labels[b.dataset.act]); }
       catch (e) { toast(e.message); }
@@ -466,7 +505,25 @@
     } catch (e) { toast(e.message); }
   });
 
-  window.auxDebug = { sp }; // handy for troubleshooting from the browser console
+  // ---------- keep screen on (leave one device open as the "host") ----------
+  let wake = null, wantWake = false;
+  async function setWake(on) {
+    wantWake = on;
+    try {
+      if (on && !document.hidden) wake = await navigator.wakeLock.request("screen");
+      if (!on && wake) { await wake.release(); wake = null; }
+    } catch { if (on) toast("This browser can't keep the screen on"); }
+    $("wakeBtn").textContent = on ? "🔆 Screen stays on" : "💤 Keep screen on";
+    $("wakeBtn").classList.toggle("on", on);
+    try { localStorage.setItem("auxWake", on ? "1" : ""); } catch {}
+  }
+  if (!("wakeLock" in navigator)) $("wakeBtn").classList.add("hidden");
+  $("wakeBtn").addEventListener("click", () => setWake(!wantWake));
+  // the browser drops the lock when the tab is hidden; take it back when it's visible again
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && wantWake) setWake(true); });
+  try { if (localStorage.getItem("auxWake")) setWake(true); } catch {}
+
+  window.auxDebug = { sp, get state() { return state; }, get plist() { return plist; }, get handoffFor() { return handoffFor; }, onEcho, upcomingStart, inQueue, outsideQueue }; // handy for troubleshooting from the browser console
 
   // ---------- start ----------
   function start() {
