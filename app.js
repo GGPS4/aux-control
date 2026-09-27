@@ -262,6 +262,16 @@
       await sp("/me/player/play" + dev, { method: "PUT", body: JSON.stringify({ uris: [t.uri] }) });
       return;
     }
+    // Already playing the shared queue: re-sending play for the same playlist makes the Echo
+    // use its cached copy (without the new song) and just restart the current track.
+    // Instead drop the song into Spotify's own up-next and skip to it; the shared queue
+    // carries on from where it was once the song ends.
+    if (inQueue() && state?.item && onEcho()) {
+      await sp(`/me/player/queue?uri=${encodeURIComponent(t.uri)}&` + dev.slice(1), { method: "POST" });
+      await sp("/me/player/next" + dev, { method: "POST" });
+      manualUntil = Date.now() + 8000;
+      return;
+    }
     const pos = upcomingStart();
     await sp(`/playlists/${PID}/items`, { method: "POST", body: JSON.stringify({ uris: [t.uri], position: pos }) });
     await sp("/me/player/play" + dev, { method: "PUT", body: JSON.stringify({ context_uri: PURI, offset: { uri: t.uri } }) });
@@ -346,6 +356,10 @@
   // Index of the first song that hasn't played yet.
   function upcomingStart() {
     if (inQueue() && curIdx >= 0) return curIdx + 1;
+    if (inQueue() && lastQueueUri) { // a force-played song is on: everything after the last queue song is next
+      const li = plist.findIndex((t) => t.uri === lastQueueUri);
+      if (li >= 0) return li + 1;
+    }
     const first = plist[0]?.uri;
     return first && (first === lastQueueUri || first === state?.item?.uri) ? 1 : 0;
   }
@@ -383,8 +397,9 @@
     const ul = $("queue");
     const start = upcomingStart();
     const rows = [];
-    if (inQueue() && curIdx >= 0) {
-      const t = plist[curIdx];
+    const nowT = inQueue() && curIdx >= 0 ? plist[curIdx] : (inQueue() && state?.item?.type === "track" ? state.item : null);
+    if (nowT) {
+      const t = nowT;
       rows.push(`<li class="playing"><img src="${esc(smallImg(t.album?.images))}" alt="">
         <div class="txt"><div>▶ ${esc(t.name)}</div><div class="muted">${esc(artists(t))} • now playing</div></div></li>`);
     }
