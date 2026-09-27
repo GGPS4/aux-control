@@ -11,9 +11,8 @@
     <header class="top">
       <div>
         <h1 id="partyName">Aux Control</h1>
-        <p class="sub">Control the music on the speaker</p>
+        <p class="sub">Control the music on the Echo</p>
       </div>
-      <button id="partyBtn" class="ghost hidden">🎉 Party mode</button>
     </header>
 
     <section id="gate" class="card hidden">
@@ -35,6 +34,11 @@
           <div class="times"><span id="tNow">0:00</span><span id="tDur">0:00</span></div>
         </div>
       </section>
+
+      <div id="echoNotice" class="banner hidden" style="margin:0 0 14px">
+        <span id="echoNoticeTxt"></span>
+        <button id="moveToEcho" class="small">Move to Echo</button>
+      </div>
 
       <section class="controls">
         <button data-act="previous" title="Previous song">⏮<span>Back</span></button>
@@ -70,11 +74,8 @@
       </section>
 
       <section class="card">
-        <div class="row between"><h2>Up next</h2><button id="clearPlayed" class="ghost small">Clear played</button></div>
-        <div id="startBanner" class="banner hidden">
-          <span>The party queue isn't what's playing right now.</span>
-          <button id="startQueue" class="small">▶ Start party queue</button>
-        </div>
+        <h2>Shared queue</h2>
+        <p class="muted small-txt" style="margin:0 0 4px">Everyone's songs play in this order. Use the arrows to move them.</p>
         <ul id="queue" class="list"></ul>
       </section>
 
@@ -83,31 +84,10 @@
         <div id="lyrics" class="lyrics"><p class="muted">No song playing</p></div>
       </section>
 
-      <section class="card">
-        <h2>Speaker</h2>
-        <p class="muted">Pick the Echo/Alexa to play on it. If it isn't listed, say "Alexa, play Spotify" once to wake it up.</p>
-        <ul id="devices" class="list"></ul>
-      </section>
     </div>
 
     <div id="toast" class="toast"></div>
   </main>
-
-  <div id="party" class="party hidden">
-    <div id="partyBg" class="party-bg"></div>
-    <button id="partyExit" class="party-exit" title="Exit">✕</button>
-    <div class="party-inner">
-      <img id="pArt" alt="">
-      <div class="party-meta">
-        <div id="pTitle" class="p-title"></div>
-        <div id="pArtist" class="p-artist"></div>
-        <div class="bar p-bar"><div id="pProgress"></div></div>
-        <div id="pLyric" class="p-lyric"></div>
-        <div id="pLyricNext" class="p-lyric-next"></div>
-        <div id="pNext" class="p-next"></div>
-      </div>
-    </div>
-  </div>
 
   <script>
     // Load config + app fresh every time (GitHub Pages caches files for ~10 min).

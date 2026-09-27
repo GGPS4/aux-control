@@ -7,7 +7,7 @@
 
   let token = null, tokenExp = 0;
   let state = null, lastFetch = 0;          // player state
-  let plist = [], snapshot = null, curIdx = -1; // party-queue playlist
+  let plist = [], snapshot = null, curIdx = -1, lastQueueUri = "", cleaning = false; // shared-queue playlist
   let lyr = { key: "", lines: [], plain: "" }, lyrIdx = -2;
   let volBusy = 0;
 
@@ -59,7 +59,7 @@
     let j = null; try { j = text ? JSON.parse(text) : null; } catch { j = null; }
     if (!r.ok) {
       const msg = j?.error?.message || r.statusText;
-      if (r.status === 404 && path.startsWith("/me/player")) throw new Error("No active speaker — pick one under Speaker");
+      if (r.status === 404 && path.startsWith("/me/player")) throw new Error("Nothing is playing on the Echo — tap a song to start");
       throw new Error(msg);
     }
     return j;
@@ -73,6 +73,7 @@
       lastFetch = Date.now();
       renderNow();
       renderVolume();
+      renderSpeakerNotice();
       if (state?.item?.uri !== prevUri) { loadLyrics(); loadQueue(); if (simFor) loadSimilar(); }
       else computeCurIdx(), renderQueue();
     } catch (e) { $("title").textContent = e.message; }
@@ -86,10 +87,6 @@
     if (img && $("art").src !== img) $("art").src = img;
     $("tDur").textContent = fmt(item?.duration_ms);
     $("playBtn").querySelector("b").textContent = state?.is_playing ? "⏸" : "▶";
-    // party screen
-    $("pTitle").textContent = item ? item.name : "Nothing playing";
-    $("pArtist").textContent = item ? artists(item) : "";
-    if (img && $("pArt").src !== img) { $("pArt").src = img; $("partyBg").style.backgroundImage = `url("${img}")`; }
     tick();
   }
 
@@ -99,17 +96,22 @@
     $("tNow").textContent = fmt(pos);
     const pct = (100 * pos / item.duration_ms) + "%";
     $("progress").style.width = pct;
-    $("pProgress").style.width = pct;
     syncLyrics(pos);
     if (state.is_playing && pos >= item.duration_ms && Date.now() - lastFetch > 1500) refresh();
   }
 
   // ---------- controls ----------
   const actions = {
-    next: () => sp("/me/player/next", { method: "POST" }),
-    previous: () => sp("/me/player/previous", { method: "POST" }),
-    restart: () => sp("/me/player/seek?position_ms=0", { method: "PUT" }),
-    toggle: () => sp(state?.is_playing ? "/me/player/pause" : "/me/player/play", { method: "PUT" }),
+    next: async () => (!inQueue() && upcomingStart() < plist.length)
+      ? startQueueAt(upcomingStart())
+      : sp("/me/player/next" + await deviceParam(), { method: "POST" }),
+    previous: async () => sp("/me/player/previous" + await deviceParam(), { method: "POST" }),
+    restart: async () => sp("/me/player/seek" + await deviceParam("?position_ms=0"), { method: "PUT" }),
+    toggle: async () => {
+      if (state?.is_playing) return sp("/me/player/pause" + await deviceParam(), { method: "PUT" });
+      if (!inQueue() && upcomingStart() < plist.length) return startQueueAt(upcomingStart());
+      return sp("/me/player/play" + await deviceParam(), { method: "PUT" });
+    },
   };
   const labels = { next: "Skipped ⏭", previous: "Went back ⏮", restart: "Restarted ↺", toggle: "Done" };
   document.querySelectorAll(".controls button").forEach((b) =>
@@ -137,7 +139,7 @@
   async function setVolume(v) {
     volBusy = Date.now();
     $("vol").value = v; $("volVal").textContent = v + "%";
-    try { await sp(`/me/player/volume?volume_percent=${v}`, { method: "PUT" }); }
+    try { await sp("/me/player/volume" + await deviceParam(`?volume_percent=${v}`), { method: "PUT" }); }
     catch (e) { toast(e.message); }
   }
   $("vol").addEventListener("input", () => {
@@ -192,18 +194,28 @@
     }
     await sp(`/playlists/${PID}/items`, { method: "POST", body: JSON.stringify({ uris: [t.uri] }) });
     await loadQueue();
+    if (!state?.is_playing) setTimeout(() => toast("Queued — press ▶ to start the music"), 1200);
   }
 
-  // Aim at the active speaker, or the Echo/Alexa if nothing is active.
-  async function deviceParam() {
-    if (state?.device) return "";
+  // Everything only ever plays on the Echo Plus.
+  const SPEAKER = C.speakerName || "Echo Plus";
+  let echoCache = { id: "", at: 0 };
+  async function echoId(force) {
+    if (!force && echoCache.id && Date.now() - echoCache.at < 60000) return echoCache.id;
     const d = (await sp("/me/player/devices"))?.devices || [];
-    const pick = d.find((x) => x.is_active) || d.find((x) => /echo|alexa/i.test(x.name)) || d.find((x) => x.type === "Speaker") || d[0];
-    if (!pick) throw new Error("No speakers online — say \"Alexa, play Spotify\" first");
-    return "?device_id=" + pick.id;
+    const want = SPEAKER.toLowerCase();
+    const pick = d.find((x) => x.name.toLowerCase().includes(want)) || d.find((x) => /echo|alexa/i.test(x.name));
+    if (!pick) throw new Error(`The ${SPEAKER} is offline — say "Alexa, play Spotify" once to wake it up`);
+    echoCache = { id: pick.id, at: Date.now() };
+    return pick.id;
   }
+  async function deviceParam(extra) {
+    const id = await echoId();
+    return (extra ? extra + "&" : "?") + "device_id=" + id;
+  }
+  const onEcho = () => !state?.device || (echoCache.id ? state.device.id === echoCache.id : /echo|alexa/i.test(state.device.name));
 
-  // Play a song right now. It's slotted in right after the current song in the party
+  // Play a song right now. It's slotted in right after the current song in the shared
   // queue, so everything that was queued still plays afterwards.
   async function playNow(t) {
     const dev = await deviceParam();
@@ -211,11 +223,11 @@
       await sp("/me/player/play" + dev, { method: "PUT", body: JSON.stringify({ uris: [t.uri] }) });
       return;
     }
-    const pos = inParty() && curIdx >= 0 ? curIdx + 1 : 0;
+    const pos = upcomingStart();
     await sp(`/playlists/${PID}/items`, { method: "POST", body: JSON.stringify({ uris: [t.uri], position: pos }) });
-    await sp("/me/player/play" + dev, { method: "PUT", body: JSON.stringify({ context_uri: PURI, offset: { position: pos } }) });
+    await sp("/me/player/play" + dev, { method: "PUT", body: JSON.stringify({ context_uri: PURI, offset: { uri: t.uri } }) });
     curIdx = pos;
-    sp("/me/player/shuffle?state=false", { method: "PUT" }).catch(() => {});
+    deviceParam("?state=false").then((q) => sp("/me/player/shuffle" + q, { method: "PUT" })).catch(() => {});
     loadQueue();
   }
 
@@ -261,7 +273,7 @@
   }
   $("simBtn").addEventListener("click", () => { $("simBtn").textContent = "↻ Refresh"; loadSimilar(true); });
 
-  // ---------- party queue (a playlist, so it can be reordered) ----------
+  // ---------- shared queue (a playlist, so it can be reordered) ----------
   async function loadQueue() {
     if (!PID) return loadNativeQueue();
     try {
@@ -276,27 +288,63 @@
       snapshot = meta?.snapshot_id || snapshot;
       computeCurIdx();
       renderQueue();
+      cleanPlayed();
     } catch (e) { $("queue").innerHTML = `<li class='muted'>${esc(e.message)}</li>`; }
   }
 
-  function inParty() { return state?.context?.uri === PURI; }
+  function inQueue() { return state?.context?.uri === PURI; }
 
   function computeCurIdx() {
     const uri = state?.item?.uri;
-    if (!inParty() || !uri) { curIdx = -1; return; }
+    if (!inQueue() || !uri) { curIdx = -1; return; }
     // prefer the occurrence closest to where we last were
     const hits = plist.map((t, i) => (t.uri === uri ? i : -1)).filter((i) => i >= 0);
     if (!hits.length) { curIdx = -1; return; }
     curIdx = hits.find((i) => i >= curIdx) ?? hits[0];
+    lastQueueUri = uri;
+  }
+
+  // Index of the first song that hasn't played yet.
+  function upcomingStart() {
+    if (inQueue() && curIdx >= 0) return curIdx + 1;
+    const first = plist[0]?.uri;
+    return first && (first === lastQueueUri || first === state?.item?.uri) ? 1 : 0;
+  }
+
+  // Played songs remove themselves so the queue only ever shows what's next.
+  async function cleanPlayed() {
+    if (cleaning || !PID) return;
+    const start = upcomingStart();
+    const keepFrom = inQueue() && curIdx >= 0 ? curIdx : start;
+    if (keepFrom <= 0) return;
+    const keep = new Set(plist.slice(keepFrom).map((t) => t.uri));
+    const played = [...new Set(plist.slice(0, keepFrom).map((t) => t.uri))].filter((u) => !keep.has(u));
+    if (!played.length) return;
+    cleaning = true;
+    try {
+      for (let k = 0; k < played.length; k += 100) {
+        await sp(`/playlists/${PID}/items`, { method: "DELETE", body: JSON.stringify({ items: played.slice(k, k + 100).map((uri) => ({ uri })) }) });
+      }
+    } catch { /* another viewer probably cleaned it already */ }
+    cleaning = false;
+    setTimeout(loadQueue, 800);
+  }
+
+  async function startQueueAt(pos) {
+    const dev = await deviceParam();
+    const uri = plist[pos]?.uri;
+    await sp("/me/player/play" + dev, { method: "PUT", body: JSON.stringify({ context_uri: PURI, offset: uri ? { uri } : { position: pos } }) });
+    curIdx = pos;
+    deviceParam("?state=false").then((q) => sp("/me/player/shuffle" + q, { method: "PUT" })).catch(() => {});
+    setTimeout(refresh, 900);
   }
 
   function renderQueue() {
     if (!PID) return;
     const ul = $("queue");
-    $("startBanner").classList.toggle("hidden", inParty() || !plist.length);
-    const start = inParty() ? curIdx + 1 : 0;
+    const start = upcomingStart();
     const rows = [];
-    if (inParty() && curIdx >= 0) {
+    if (inQueue() && curIdx >= 0) {
       const t = plist[curIdx];
       rows.push(`<li class="playing"><img src="${esc(smallImg(t.album?.images))}" alt="">
         <div class="txt"><div>▶ ${esc(t.name)}</div><div class="muted">${esc(artists(t))} • now playing</div></div></li>`);
@@ -313,11 +361,8 @@
           <button data-op="del" data-i="${i}" class="del" title="Remove">✕</button>
         </div></li>`);
     }
-    ul.innerHTML = rows.length > (curIdx >= 0 ? 1 : 0) ? rows.join("") : (rows.join("") + "<li class='muted'>Nothing queued — search for a song above</li>");
+    ul.innerHTML = start < plist.length ? rows.join("") : (rows.join("") + "<li class='muted'>Nothing queued — search for a song above</li>");
     ul.querySelectorAll("button[data-op]").forEach((b) => b.addEventListener("click", () => queueOp(b.dataset.op, +b.dataset.i, start)));
-    // party screen "up next"
-    const nxt = plist[start];
-    $("pNext").textContent = nxt ? `Up next: ${nxt.name} — ${artists(nxt)}` : "";
   }
 
   async function move(from, insertBefore) {
@@ -342,30 +387,6 @@
     loadQueue();
   }
 
-  $("startQueue").addEventListener("click", async () => {
-    try {
-      const dev = await deviceParam();
-      await sp("/me/player/play" + dev, { method: "PUT", body: JSON.stringify({ context_uri: PURI, offset: { position: 0 } }) });
-      await sp("/me/player/shuffle?state=false", { method: "PUT" }).catch(() => {});
-      toast("Party queue started 🎉"); curIdx = 0;
-      setTimeout(refresh, 900);
-    } catch (e) { toast(e.message); }
-  });
-
-  $("clearPlayed").addEventListener("click", async () => {
-    if (!inParty() || curIdx <= 0) { toast("Nothing played to clear"); return; }
-    const current = plist[curIdx]?.uri;
-    const played = [...new Set(plist.slice(0, curIdx).map((t) => t.uri))].filter((u) => u !== current);
-    try {
-      for (let k = 0; k < played.length; k += 100) {
-        const chunk = played.slice(k, k + 100).map((uri) => ({ uri }));
-        await sp(`/playlists/${PID}/items`, { method: "DELETE", body: JSON.stringify({ items: chunk }) });
-      }
-      toast("Cleared played songs"); curIdx = 0; loadQueue();
-    } catch (e) { toast(e.message); }
-  });
-  if (!PID) $("clearPlayed").classList.add("hidden");
-
   // fallback: read-only view of Spotify's built-in queue
   async function loadNativeQueue() {
     const ul = $("queue");
@@ -383,7 +404,7 @@
   async function loadLyrics() {
     const item = state?.item;
     const box = $("lyrics");
-    if (!item || item.type !== "track") { lyr = { key: "", lines: [], plain: "" }; box.innerHTML = "<p class='muted'>No song playing</p>"; setPartyLyric("", ""); return; }
+    if (!item || item.type !== "track") { lyr = { key: "", lines: [], plain: "" }; box.innerHTML = "<p class='muted'>No song playing</p>"; return; }
     const key = item.uri; if (lyr.key === key) return;
     lyr = { key, lines: [], plain: "" }; lyrIdx = -2;
     box.innerHTML = "<p class='muted'>Loading lyrics…</p>"; $("lyrSrc").textContent = "";
@@ -411,11 +432,11 @@
       lyr.plain = data.plainLyrics;
       box.innerHTML = data.plainLyrics.split("\n").map((l) => `<p>${esc(l) || "&nbsp;"}</p>`).join("");
       $("lyrSrc").textContent = "not synced";
-      setPartyLyric("", "");
+     
     } else if (data?.instrumental) {
-      box.innerHTML = "<p class='muted'>Instrumental ♪</p>"; setPartyLyric("♪", "");
+      box.innerHTML = "<p class='muted'>Instrumental ♪</p>";
     } else {
-      box.innerHTML = "<p class='muted'>No lyrics found for this song</p>"; setPartyLyric("", "");
+      box.innerHTML = "<p class='muted'>No lyrics found for this song</p>";
     }
     tick();
   }
@@ -430,42 +451,20 @@
     box.querySelectorAll("p.cur").forEach((p) => p.classList.remove("cur"));
     const el = box.querySelector(`p[data-i="${i}"]`);
     if (el) { el.classList.add("cur"); box.scrollTop = el.offsetTop - box.offsetTop - box.clientHeight / 2 + el.clientHeight / 2; }
-    setPartyLyric(i >= 0 ? lyr.lines[i].text || "♪" : "", lyr.lines[i + 1]?.text || "");
   }
-  function setPartyLyric(a, b) { $("pLyric").textContent = a; $("pLyricNext").textContent = b; }
 
-  // ---------- party mode ----------
-  $("partyBtn").addEventListener("click", () => {
-    $("party").classList.remove("hidden");
-    document.documentElement.requestFullscreen?.().catch(() => {});
-  });
-  const exitParty = () => {
-    $("party").classList.add("hidden");
-    if (document.fullscreenElement) document.exitFullscreen?.();
-  };
-  $("partyExit").addEventListener("click", exitParty);
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") exitParty(); });
-  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement) $("party").classList.add("hidden"); });
-
-  // ---------- devices ----------
-  async function loadDevices() {
-    const ul = $("devices");
+  // ---------- keep it on the Echo ----------
+  function renderSpeakerNotice() {
+    const other = state?.device && !onEcho();
+    $("echoNotice").classList.toggle("hidden", !other);
+    if (other) $("echoNoticeTxt").textContent = `Music is playing on "${state.device.name}", not the ${SPEAKER}.`;
+  }
+  $("moveToEcho").addEventListener("click", async () => {
     try {
-      const j = await sp("/me/player/devices");
-      const devs = j?.devices || [];
-      if (!devs.length) { ul.innerHTML = "<li class='muted'>No speakers online</li>"; return; }
-      ul.innerHTML = devs.map((d, i) => `
-        <li><div class="txt"><div class="${d.is_active ? "active-dev" : ""}">${esc(d.name)}${d.is_active ? " • playing here" : ""}</div>
-          <div class="muted">${esc(d.type)}${typeof d.volume_percent === "number" ? " • vol " + d.volume_percent + "%" : ""}</div></div>
-          ${d.is_active ? "" : `<button class="ghost" data-i="${i}">Play here</button>`}</li>`).join("");
-      ul.querySelectorAll("button").forEach((b) => b.addEventListener("click", async () => {
-        try {
-          await sp("/me/player", { method: "PUT", body: JSON.stringify({ device_ids: [devs[b.dataset.i].id], play: true }) });
-          toast("Switched speaker"); setTimeout(() => { loadDevices(); refresh(); }, 800);
-        } catch (e) { toast(e.message); }
-      }));
-    } catch (e) { ul.innerHTML = `<li class='muted'>${esc(e.message)}</li>`; }
-  }
+      await sp("/me/player", { method: "PUT", body: JSON.stringify({ device_ids: [await echoId(true)], play: true }) });
+      toast(`Moved to the ${SPEAKER}`); setTimeout(refresh, 900);
+    } catch (e) { toast(e.message); }
+  });
 
   window.auxDebug = { sp }; // handy for troubleshooting from the browser console
 
@@ -473,11 +472,9 @@
   function start() {
     $("gate").classList.add("hidden");
     $("app").classList.remove("hidden");
-    $("partyBtn").classList.remove("hidden");
-    refresh(); loadQueue(); loadDevices();
+    refresh(); loadQueue(); echoId().catch(() => {});
     setInterval(refresh, 4000);
     setInterval(loadQueue, 12000);
-    setInterval(loadDevices, 30000);
     setInterval(tick, 250);
   }
 
