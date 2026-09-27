@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aux Control</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <h1 id="partyName">Aux Control</h1>
+      <p class="sub">Control the music on the speaker</p>
+    </header>
+
+    <section id="gate" class="card hidden">
+      <h2>Enter the access code</h2>
+      <form id="gateForm" class="row">
+        <input id="gateInput" type="password" placeholder="Code" autocomplete="off">
+        <button type="submit">Unlock</button>
+      </form>
+      <p id="gateMsg" class="muted"></p>
+    </section>
+
+    <div id="app" class="hidden">
+      <section class="card now">
+        <img id="art" alt="" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">
+        <div class="meta">
+          <div id="title" class="title">Nothing playing</div>
+          <div id="artist" class="muted"></div>
+          <div class="bar"><div id="progress"></div></div>
+          <div class="times"><span id="tNow">0:00</span><span id="tDur">0:00</span></div>
+        </div>
+      </section>
+
+      <section class="controls">
+        <button data-act="previous" title="Previous song">⏮<span>Back</span></button>
+        <button data-act="restart" title="Restart this song">↺<span>Restart</span></button>
+        <button data-act="toggle" id="playBtn" title="Play / pause">⏯<span>Play/Pause</span></button>
+        <button data-act="next" title="Skip">⏭<span>Skip</span></button>
+      </section>
+
+      <section class="card">
+        <h2>Add to queue</h2>
+        <form id="searchForm" class="row">
+          <input id="q" type="search" placeholder="Search songs…" autocomplete="off">
+          <button type="submit">Search</button>
+        </form>
+        <ul id="results" class="list"></ul>
+      </section>
+
+      <section class="card">
+        <h2>Up next</h2>
+        <ul id="queue" class="list"></ul>
+      </section>
+
+      <section class="card">
+        <h2>Speaker</h2>
+        <p class="muted">Pick the Echo/Alexa to play on it. If it isn't listed, say "Alexa, play Spotify" once to wake it up.</p>
+        <ul id="devices" class="list"></ul>
+      </section>
+    </div>
+
+    <div id="toast" class="toast"></div>
+  </main>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
