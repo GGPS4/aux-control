@@ -14,7 +14,6 @@ It runs entirely in the browser on GitHub Pages. There is no server.
 - **Add a song.** Search Spotify, then tap a song to play it now or tap **≡+** to add it to the queue. Playing a song now slots it in right after the current one, so nothing already queued gets lost. Songs already in the queue are marked, and adding one again asks you to tap a second time.
 - **Add a whole album or playlist.** Search albums, or browse my playlists, then tap **Add all** (up to 100 songs, skipping ones already queued) or open it to pick songs.
 - **Shared queue.** Everyone's songs go into one queue (a private Spotify playlist behind the scenes). Move songs up, down or straight to next, or remove them. Songs that have played drop off, so the list only shows what's coming. It shows roughly when each song will start and when the queue runs out.
-- **Recently played.** The last 10 songs, with play and queue buttons to bring one back.
 - **Alexa requests.** If someone says "Alexa, play…", that song is allowed to finish, then the Echo goes back to the shared queue on its own.
 - **More like this.** Suggests songs similar to what's playing, using Deezer's artist radio matched back to Spotify.
 - **Lyrics.** Pulled from lrclib.net. Synced lyrics highlight and scroll along with the song; otherwise the plain lyrics are shown.
@@ -27,7 +26,6 @@ It runs entirely in the browser on GitHub Pages. There is no server.
   - turn off adding albums and playlists
   - block songs that are already queued
   - block explicit songs
-  - hide "Recently played" from guests
   - set a volume limit for guests
   - post a message at the top of everyone's page
   - clear the queue
@@ -48,10 +46,9 @@ If the Echo doesn't show up, say "Alexa, play Spotify" once so it registers as a
 ## Notes
 
 - Spotify refresh tokens expire about 6 months after you log in. Re-run `setup.html` when that happens.
-- Recently played needs the `user-read-recently-played` permission. Setups from before it was added need to re-run `setup.html` once. It lists everything played on my Spotify account, including in the car or on my phone, so there's a host switch to hide it.
 - The host lock and limits run in the browser like everything else. They stop normal guests, but someone who reads `config.js` can still use the Spotify keys directly.
 - Developer-mode Spotify apps allow up to 5 users, but friends don't log in, so only you count.
-- The keys in `config.js` are public. Anyone with the link (or who reads the source) can control your playback. Set an access code and don't post the link publicly. If it gets abused, rotate the Client secret in the Spotify dashboard and re-run setup.
+- The Spotify keys in `config.js` are scrambled so they can't be read at a glance, but the page has to unscramble them to work, so anyone who digs into the source can still get them and control your playback. Older commits also still contain them unscrambled. Set an access code and don't post the link publicly. If it gets abused, rotate the Client secret in the Spotify dashboard and re-run setup.
 
 ## Tech
 
@@ -62,7 +59,7 @@ index.html   the remote: now playing, controls, volume, search, queue, lyrics
 app.js       Spotify API calls, shared queue, Alexa hand-off, suggestions, lyrics, wake lock
 style.css    styling
 setup.html   owner-only Spotify login that generates config.js
-config.js    site name, Spotify keys, queue playlist, access code and host password hash
+config.js    site name, scrambled Spotify keys, queue playlist, access code and host password hash
 ```
 
 To run it locally, serve the folder with any static server (`python3 -m http.server`). For troubleshooting, `window.auxDebug` in the browser console exposes the player state and queue.

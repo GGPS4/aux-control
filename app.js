@@ -1,5 +1,12 @@
 (() => {
   const C = window.AUX_CONFIG || {};
+  // Spotify keys are stored scrambled in config.js so they aren't readable at a glance.
+  // This only hides them from casual viewers; the page has to unscramble them to work.
+  const unscramble = (s) => {
+    const k = "aux-control", b = atob(s.split("").reverse().join(""));
+    return JSON.parse(decodeURIComponent(escape([...b].map((c, i) => String.fromCharCode(c.charCodeAt(0) ^ k.charCodeAt(i % k.length))).join(""))));
+  };
+  if (C.keys) { try { Object.assign(C, unscramble(C.keys)); } catch { /* bad keys: setup.html will be needed */ } }
   const API = "https://api.spotify.com/v1";
   const PID = C.playlistId || "";
   const PURI = PID ? "spotify:playlist:" + PID : "";
@@ -14,7 +21,7 @@
 
   // ---------- host settings (shared with everyone through the queue playlist's description) ----------
   // Stored as "AUX[key=value,...]" so every open page picks them up on its next queue check.
-  const DEFAULTS = { lp: 0, lv: 0, la: 0, lq: 0, np: 0, ab: 0, dp: 0, ex: 0, hr: 0, mv: 100, m: "" };
+  const DEFAULTS = { lp: 0, lv: 0, la: 0, lq: 0, np: 0, ab: 0, dp: 0, ex: 0, mv: 100, m: "" };
   const LOCK_NAMES = { lp: "skip, pause and seeking", lv: "volume", la: "adding songs", lq: "moving and removing songs" };
   let S = { ...DEFAULTS };
   let admin = false;
@@ -112,7 +119,7 @@
       renderNow();
       renderVolume();
       renderSpeakerNotice();
-      if (state?.item?.uri !== prevUri) { loadLyrics(); loadQueue(); if (simFor) loadSimilar(); setTimeout(loadRecent, 3000); }
+      if (state?.item?.uri !== prevUri) { loadLyrics(); loadQueue(); if (simFor) loadSimilar(); }
       else computeCurIdx(), renderQueue();
     } catch (e) { $("title").textContent = e.message; }
   }
@@ -762,40 +769,16 @@
     if (el) { el.classList.add("cur"); box.scrollTop = el.offsetTop - box.offsetTop - box.clientHeight / 2 + el.clientHeight / 2; }
   }
 
-  // ---------- recently played ----------
-  const ago = (iso) => {
-    const m = Math.round((Date.now() - new Date(iso)) / 60000);
-    return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} hr ago` : `${Math.round(m / 1440)} d ago`;
-  };
-  async function loadRecent() {
-    const ul = $("recent");
-    if (!admin && S.hr) return;
-    try {
-      const j = await sp("/me/player/recently-played?limit=20");
-      const seen = new Set();
-      const tracks = (j?.items || []).filter((x) => x.track && !seen.has(x.track.uri) && seen.add(x.track.uri))
-        .slice(0, 10).map((x) => ({ ...x.track, _at: x.played_at }));
-      renderTracks(ul, tracks, { sub: (t) => ago(t._at), empty: "Nothing yet" });
-    } catch (e) {
-      ul.innerHTML = /scope|permission|forbidden/i.test(e.message)
-        ? "<li class='muted'>The host needs to re-run setup once to turn this on.</li>"
-        : `<li class='muted'>${esc(e.message)}</li>`;
-    }
-  }
-  $("recentBtn").addEventListener("click", loadRecent);
-
   // ---------- host mode ----------
   const sha256 = async (txt) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt)))].map((b) => b.toString(16).padStart(2, "0")).join("");
   const HOST_KEY = "auxHost";
   try { admin = !!C.adminHash && localStorage.getItem(HOST_KEY) === C.adminHash; } catch {}
 
   function applySettings(next) {
-    const wasHidden = S.hr;
     const changed = JSON.stringify(next) !== JSON.stringify(S);
     S = next;
     if (!changed) return;
     renderLocks();
-    if (wasHidden && !S.hr) loadRecent();
   }
 
   function renderLocks() {
@@ -810,7 +793,6 @@
     $("seek").disabled = !state?.item || !can("lp");
     renderVolumeLimit();
     renderAddHint();
-    $("recentCard").classList.toggle("hidden", !admin && !!S.hr);
     const noColl = !admin && S.ab;
     document.querySelectorAll('#searchTabs button:not([data-mode="track"])').forEach((b) => b.classList.toggle("hidden", noColl));
     if (noColl && mode !== "track") setMode("track");
@@ -856,7 +838,7 @@
     admin = true;
     try { localStorage.setItem(HOST_KEY, h); } catch {}
     $("hostInput").value = ""; $("hostLogin").classList.add("hidden");
-    renderLocks(); loadRecent(); toast("You're the host 🔑");
+    renderLocks(); toast("You're the host 🔑");
   });
   $("hostOut").addEventListener("click", () => {
     admin = false;
@@ -925,7 +907,7 @@
     $("gate").classList.add("hidden");
     $("app").classList.remove("hidden");
     renderLocks();
-    refresh(); loadQueue(); loadRecent(); echoId().catch(() => {});
+    refresh(); loadQueue(); echoId().catch(() => {});
     setInterval(refresh, 4000);
     setInterval(loadQueue, 12000);
     setInterval(tick, 250);
