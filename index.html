@@ -21,7 +21,10 @@
         <h1 id="partyName">Aux Control</h1>
         <p class="sub">Control the music on the Echo</p>
       </div>
-      <button id="wakeBtn" class="ghost small" title="Leave one device open with this on so the queue takes over after Alexa requests">💤 Keep screen on</button>
+      <div class="top-btns">
+        <button id="wakeBtn" class="ghost small" title="Leave one device open with this on so the queue takes over after Alexa requests">💤 Keep screen on</button>
+        <button id="hostBtn" class="ghost small" title="Host controls">🔑 Host</button>
+      </div>
     </header>
 
     <section id="gate" class="card hidden">
@@ -34,6 +37,48 @@
     </section>
 
     <div id="app" class="hidden">
+      <section id="hostLogin" class="card hidden">
+        <h2>Host login</h2>
+        <form id="hostForm" class="row">
+          <input id="hostInput" type="password" placeholder="Host password" autocomplete="current-password">
+          <button type="submit">Log in</button>
+        </form>
+        <p id="hostMsg" class="muted small-txt"></p>
+      </section>
+
+      <section id="admin" class="card admin hidden">
+        <div class="row between"><h2>Host controls</h2><button id="hostOut" class="ghost small">Log out</button></div>
+        <button id="lockAll" class="lock-all">🔒 Lock everything</button>
+        <p class="muted small-txt">Changes reach everyone's page within about 12 seconds. Host controls are never locked for you.</p>
+        <div class="toggles">
+          <label><input type="checkbox" data-set="lp"> Lock skip, pause and seeking</label>
+          <label><input type="checkbox" data-set="lv"> Lock volume</label>
+          <label><input type="checkbox" data-set="la"> Lock adding songs</label>
+          <label><input type="checkbox" data-set="lq"> Lock moving and removing queued songs</label>
+          <label><input type="checkbox" data-set="np"> Turn off "Play now" for guests (songs go in the queue)</label>
+          <label><input type="checkbox" data-set="ab"> Turn off adding whole albums and playlists</label>
+          <label><input type="checkbox" data-set="dp"> Block songs that are already queued</label>
+          <label><input type="checkbox" data-set="ex"> Block explicit songs</label>
+          <label><input type="checkbox" data-set="hr"> Hide "Recently played" from guests</label>
+        </div>
+        <div class="admin-row">
+          <span>Guest volume limit</span>
+          <input id="capVol" type="range" min="10" max="100" step="5" value="100">
+          <b id="capVal" class="vol-val">100%</b>
+        </div>
+        <form id="msgForm" class="row admin-row">
+          <input id="msgInput" maxlength="80" placeholder="Message to everyone (shows at the top)">
+          <button type="submit" class="small">Post</button>
+        </form>
+        <div class="row wrap-row">
+          <button id="msgClear" class="ghost small">Remove message</button>
+          <button id="clearQueue" class="ghost small danger">Clear the queue</button>
+        </div>
+      </section>
+
+      <div id="hostMsgBanner" class="banner msg hidden" style="margin:0 0 14px"><span>📣</span><span id="hostMsgTxt"></span></div>
+      <div id="lockBanner" class="banner lock hidden" style="margin:0 0 14px"><span id="lockTxt"></span></div>
+
       <section class="card now">
         <img id="art" alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
         <div class="meta">
@@ -65,15 +110,21 @@
           <button id="volMax" class="small">MAX</button>
         </div>
         <p id="volNote" class="muted small-txt hidden">This speaker doesn't let Spotify change its volume.</p>
+        <p id="volLimit" class="muted small-txt hidden"></p>
       </section>
 
       <section class="card">
-        <h2>Add a song</h2>
+        <h2>Add music</h2>
+        <div id="searchTabs" class="tabs" role="tablist">
+          <button type="button" data-mode="track" class="on" role="tab" aria-selected="true">Songs</button>
+          <button type="button" data-mode="album" role="tab" aria-selected="false">Albums</button>
+          <button type="button" data-mode="playlist" role="tab" aria-selected="false">Host's playlists</button>
+        </div>
         <form id="searchForm" class="row">
           <input id="q" type="search" placeholder="Search songs…" autocomplete="off">
           <button type="submit">Search</button>
         </form>
-        <p class="muted small-txt">Tap a song to play it now • tap <span class="qicon-inline">≡+</span> to add it to the queue</p>
+        <p id="addHint" class="muted small-txt">Tap a song to play it now • tap <span class="qicon-inline">≡+</span> to add it to the queue</p>
         <ul id="results" class="list"></ul>
       </section>
 
@@ -83,9 +134,14 @@
       </section>
 
       <section class="card">
-        <h2>Shared queue</h2>
+        <div class="row between"><h2>Shared queue</h2><span id="qTotal" class="muted small-txt q-total"></span></div>
         <p class="muted small-txt" style="margin:0 0 4px">Everyone's songs play in this order. Use the arrows to move them.</p>
         <ul id="queue" class="list"></ul>
+      </section>
+
+      <section id="recentCard" class="card">
+        <div class="row between"><h2>Recently played</h2><button id="recentBtn" class="ghost small">↻ Refresh</button></div>
+        <ul id="recent" class="list"><li class="muted">Loading…</li></ul>
       </section>
 
       <section class="card">

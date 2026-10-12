@@ -92,3 +92,33 @@ p > input { width: 100%; }
 #seek::-moz-range-progress { height: 5px; border-radius: 3px; background: var(--accent); }
 #seek::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 1px 3px rgba(0,0,0,.5); }
 #seek:disabled::-moz-range-thumb { visibility: hidden; }
+
+/* ---- v5: host controls, album/playlist tabs, queue times ---- */
+.top-btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+#hostBtn.on { border-color: var(--accent); color: var(--accent); }
+.tabs { display: flex; gap: 6px; margin: 0 0 10px; flex-wrap: wrap; }
+.tabs button { background: #2a2e37; color: var(--text); padding: 6px 12px; font-size: .85rem; border-radius: 999px; }
+.tabs button.on { background: var(--accent); color: var(--accent-ink); }
+.tag { display: inline-block; font-size: .68rem; font-weight: 700; padding: 1px 5px; border-radius: 4px; vertical-align: 1px; }
+.tag.e { background: #3a3f4a; color: #d8dbe0; margin-right: 6px; }
+.tag.q { background: #23301f; color: var(--accent); }
+.list li.warn, .qbtn.warn { outline: 2px solid #e5b73b; outline-offset: -2px; }
+.addall, .addall-open { flex: none; }
+.coll-head { gap: 8px; }
+.coll-head .txt div:first-child { font-weight: 700; }
+.q-total { margin: 0 0 10px; text-align: right; }
+.eta { color: var(--text); opacity: .75; }
+.controls button.locked { opacity: .45; }
+.banner.msg { background: #1f2a3a; border-color: #2f4a6a; justify-content: flex-start; }
+.banner.lock { background: #33281a; border-color: #6a4f2a; }
+.admin { border-color: #2f5a2a; }
+.lock-all { width: 100%; padding: 12px; font-size: 1rem; margin: 2px 0 0; }
+.lock-all.on { background: #e5b73b; color: #2a1f05; }
+.toggles { display: grid; gap: 2px; margin: 12px 0; }
+.toggles label { display: flex; gap: 10px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); font-size: .92rem; cursor: pointer; }
+.toggles label:first-child { border-top: 0; }
+.toggles input[type=checkbox] { flex: none; width: 18px; height: 18px; accent-color: var(--accent); margin: 0; }
+.admin-row { display: flex; gap: 10px; align-items: center; margin: 10px 0; }
+.admin-row > span { flex: none; font-size: .92rem; }
+.wrap-row { flex-wrap: wrap; }
+button.danger { color: #ff8080; border-color: #5a2a2a; }
