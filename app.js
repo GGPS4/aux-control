@@ -10,6 +10,7 @@
   let plist = [], snapshot = null, curIdx = -1, lastQueueUri = "", cleaning = false; // shared-queue playlist
   let lyr = { key: "", lines: [], plain: "" }, lyrIdx = -2;
   let volBusy = 0;
+  let seeking = false; // true while someone is dragging the song position slider
 
   document.title = C.partyName || "Aux Control";
   $("partyName").textContent = C.partyName || "Aux Control";
@@ -88,6 +89,8 @@
     const img = item ? bigImg(item.album?.images || item.images) : "";
     if (img && $("art").src !== img) $("art").src = img;
     $("tDur").textContent = fmt(item?.duration_ms);
+    $("seek").disabled = !item;
+    if (!item) { seeking = false; showPos(0, 1); }
     $("playBtn").querySelector("b").textContent = state?.is_playing ? "⏸" : "▶";
     tick();
   }
@@ -95,9 +98,7 @@
   function tick() {
     const item = state?.item; if (!item) return;
     const pos = position();
-    $("tNow").textContent = fmt(pos);
-    const pct = (100 * pos / item.duration_ms) + "%";
-    $("progress").style.width = pct;
+    if (!seeking) showPos(pos, item.duration_ms);
     syncLyrics(pos);
     if (state.is_playing && pos >= item.duration_ms && Date.now() - lastFetch > 1500) refresh();
     // Something Alexa started is about to finish -> hand the Echo over to the shared queue.
@@ -162,6 +163,40 @@
       setTimeout(refresh, 700);
     })
   );
+
+  // ---------- song position: drag the bar to jump around in the song ----------
+  function showPos(pos, dur) {
+    const frac = dur ? Math.min(1, Math.max(0, pos / dur)) : 0;
+    const seek = $("seek");
+    seek.value = Math.round(frac * 1000);
+    seek.style.setProperty("--pct", (frac * 100) + "%");
+    $("tNow").textContent = fmt(pos);
+  }
+  let seekSafety;
+  const seekMs = () => Math.round((+$("seek").value / 1000) * (state?.item?.duration_ms || 0));
+  $("seek").addEventListener("input", () => {
+    // while dragging, just preview the time; the jump happens when the finger lets go
+    if (!state?.item) return;
+    seeking = true;
+    clearTimeout(seekSafety); seekSafety = setTimeout(() => { seeking = false; }, 10000); // in case "change" never fires
+    const ms = seekMs();
+    $("seek").style.setProperty("--pct", ($("seek").value / 10) + "%");
+    $("tNow").textContent = fmt(ms);
+  });
+  $("seek").addEventListener("change", async () => {
+    const item = state?.item;
+    if (!item) { seeking = false; return; }
+    const ms = Math.min(seekMs(), item.duration_ms - 1000);
+    manualUntil = Date.now() + 8000;
+    try {
+      await sp("/me/player/seek" + await deviceParam(`?position_ms=${Math.max(0, ms)}`), { method: "PUT" });
+      if (state?.item?.uri === item.uri) { state.progress_ms = Math.max(0, ms); lastFetch = Date.now(); }
+      toast(`Jumped to ${fmt(ms)}`);
+    } catch (e) { toast(e.message); }
+    seeking = false; clearTimeout(seekSafety);
+    tick();
+    setTimeout(refresh, 900);
+  });
 
   // ---------- volume (0–100 = full range of the speaker) ----------
   function renderVolume() {

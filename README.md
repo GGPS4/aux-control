@@ -8,7 +8,7 @@ It runs entirely in the browser on GitHub Pages. There is no server.
 
 ## What it does
 
-- **Now playing.** Album art, title, artist and a live progress bar for whatever is on the Echo.
+- **Now playing.** Album art, title, artist and a live progress bar for whatever is on the Echo. Drag the progress bar to jump to any point in the song.
 - **Controls.** Back, restart, play/pause and skip, all sent straight to the Echo.
 - **Volume.** A slider covering the speaker's full range, plus a **MAX** button.
 - **Add a song.** Search Spotify, then tap a song to play it now or tap **≡+** to add it to the queue. Playing a song now slots it in right after the current one, so nothing already queued gets lost.

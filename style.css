@@ -16,8 +16,6 @@ header h1 { margin: 0; font-size: 1.6rem; }
 #art { width: 96px; height: 96px; border-radius: 10px; object-fit: cover; background: #000; flex: none; }
 .meta { flex: 1; min-width: 0; }
 .title { font-weight: 700; font-size: 1.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bar { height: 5px; background: var(--line); border-radius: 3px; margin-top: 10px; overflow: hidden; }
-#progress { height: 100%; width: 0; background: var(--accent); transition: width .5s linear; }
 .times { display: flex; justify-content: space-between; font-size: .8rem; color: var(--muted); margin-top: 4px; }
 .controls { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
 .controls button { font-size: 1.6rem; padding: 14px 4px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
@@ -78,3 +76,19 @@ p > input { width: 100%; }
 .qicon-inline { font-weight: 700; color: var(--text); }
 
 #wakeBtn.on { border-color: var(--accent); color: var(--accent); }
+
+/* ---- v4: draggable song position ---- */
+#seek { display: block; width: 100%; height: 22px; margin: 6px 0 0; padding: 0; border: 0; background: transparent;
+  -webkit-appearance: none; appearance: none; cursor: pointer; touch-action: none; --pct: 0%; }
+#seek:disabled { cursor: default; opacity: 1; }
+#seek:focus { outline: none; }
+#seek::-webkit-slider-runnable-track { height: 5px; border-radius: 3px;
+  background: linear-gradient(to right, var(--accent) var(--pct), var(--line) var(--pct)); }
+#seek::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; margin-top: -4.5px;
+  border-radius: 50%; background: #fff; border: 0; box-shadow: 0 1px 3px rgba(0,0,0,.5); transition: transform .15s; }
+#seek:active::-webkit-slider-thumb, #seek:focus-visible::-webkit-slider-thumb { transform: scale(1.3); }
+#seek:disabled::-webkit-slider-thumb { visibility: hidden; }
+#seek::-moz-range-track { height: 5px; border-radius: 3px; background: var(--line); }
+#seek::-moz-range-progress { height: 5px; border-radius: 3px; background: var(--accent); }
+#seek::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 1px 3px rgba(0,0,0,.5); }
+#seek:disabled::-moz-range-thumb { visibility: hidden; }
