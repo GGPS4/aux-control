@@ -5,5 +5,6 @@ window.AUX_CONFIG = {
   "clientSecret": "94f7fbb6a50e400491cbad6b6755ff44",
   "refreshToken": "AQBjNTqJHlQv04T9Q1bbG6t9a5pixb60AXYFB9_ZZSU6C7CzLzuhPbv9diZ9Ucy2jsJdFmPj4Gi3uOUtmwn6l5gRMimBkU--cWr8nmCIKIb0Z7vTXLlx4YbYQGFXyEB8ECI",
   "playlistId": "43I7dcnHHnQBf5WOn6I6GW",
-  "accessCode": ""
+  "accessCode": "",
+  "adminHash": "14acf472da7e247b90714cd4858431abc4610ae9fc8bb8e3daaf6c3ee8282f1a"
 };
